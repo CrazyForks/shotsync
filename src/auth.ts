@@ -10,6 +10,11 @@ function constantTimeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+// Read access: on a demo pool everyone may view; otherwise same as isAuthed.
+export function canRead(request: Request, env: Env): boolean {
+  return env.DEMO_MODE === "1" || isAuthed(request, env);
+}
+
 export function isAuthed(request: Request, env: Env): boolean {
   // No server token configured (misconfig or secret not yet propagated) -> deny
   // cleanly. Never fall through to the comparison, which would read .length of

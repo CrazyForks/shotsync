@@ -1,9 +1,9 @@
 import { Env, err, json } from "../responses";
-import { isAuthed } from "../auth";
+import { canRead } from "../auth";
 import { epochMsFromId, idFromFullKey } from "../ids";
 
 export async function handleList(request: Request, env: Env): Promise<Response> {
-  if (!isAuthed(request, env)) return err(401, "unauthorized");
+  if (!canRead(request, env)) return err(401, "unauthorized");
 
   const url = new URL(request.url);
   const limit = Math.min(Number(url.searchParams.get("limit")) || 50, 100);

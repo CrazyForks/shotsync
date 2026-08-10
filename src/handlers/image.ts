@@ -1,5 +1,5 @@
 import { Env, err } from "../responses";
-import { isAuthed } from "../auth";
+import { canRead } from "../auth";
 import { FULL_EXTS, thumbKey } from "../ids";
 
 // Try to find full image with one of the supported extensions
@@ -13,7 +13,7 @@ export async function getFull(env: Env, id: string): Promise<R2ObjectBody | null
 
 export async function handleImage(request: Request, env: Env, id: string): Promise<Response> {
   // Check authentication
-  if (!isAuthed(request, env)) return err(401, "unauthorized");
+  if (!canRead(request, env)) return err(401, "unauthorized");
 
   // Get size parameter from query string
   const size = new URL(request.url).searchParams.get("size");

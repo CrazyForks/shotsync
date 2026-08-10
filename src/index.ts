@@ -4,7 +4,7 @@ import { handleList } from "./handlers/list";
 import { handleImage } from "./handlers/image";
 import { handleDelete } from "./handlers/del";
 import { handleShareCreate, handleSharedItem } from "./handlers/share";
-import { galleryHTML } from "./gallery/page";
+import { galleryDemoHTML, galleryHTML } from "./gallery/page";
 import { manifestJSON } from "./gallery/manifest";
 import { swJS } from "./gallery/sw";
 
@@ -15,7 +15,9 @@ export default {
     const m = request.method;
 
     if (pathname === "/" && m === "GET") {
-      return new Response(galleryHTML, { headers: { "content-type": "text/html; charset=utf-8" } });
+      // On the demo deployment, flip the frontend into read-only demo chrome.
+      const html = env.DEMO_MODE === "1" ? galleryDemoHTML : galleryHTML;
+      return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
     }
     if (pathname === "/manifest.webmanifest" && m === "GET") {
       return new Response(manifestJSON, { headers: { "content-type": "application/manifest+json" } });

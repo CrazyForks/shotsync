@@ -1,3 +1,5 @@
+// The demo variant is derived once at module load (see the bottom of this file)
+// by flipping the DEMO const the inline script declares.
 export const galleryHTML = /* html */ `<!doctype html>
 <html lang="zh">
 <head>
@@ -76,6 +78,7 @@ export const galleryHTML = /* html */ `<!doctype html>
   </div>
 
 <script>
+const DEMO = false; // the DEMO_MODE worker serves this page with "true" (see index.ts)
 const TOKEN_KEY = "shotsync_token";
 let token = localStorage.getItem(TOKEN_KEY) || "";
 
@@ -393,10 +396,28 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
 
+// Read-only demo pool: no token gate, no write affordances, a link back to the repo.
+async function enterDemo() {
+  showApp();
+  ["#uploadBtn", "#textBtn", "#selectBtn", "#shareBtn", "#delBtn"].forEach((s) => $(s).classList.add("hidden"));
+  $("#bar h1").textContent = "shotsync · 只读演示池";
+  const link = document.createElement("a");
+  link.href = "https://github.com/Defiabell/shotsync";
+  link.target = "_blank";
+  link.rel = "noreferrer";
+  link.textContent = "5 分钟部署自己的 →";
+  link.style.cssText = "color:#8ab4ff;font-size:13px;text-decoration:none;white-space:nowrap";
+  $("#bar").appendChild(link);
+  await initFeed();
+}
+
 (async function boot() {
+  if (DEMO) { await enterDemo(); return; }
   if (token && await apiOk()) { showApp(); setupUpload(); await initFeed(); }
   else { showGate(); }
 })();
 </script>
 </body>
 </html>`;
+
+export const galleryDemoHTML = galleryHTML.replace("const DEMO = false", "const DEMO = true");
