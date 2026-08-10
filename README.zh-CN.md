@@ -4,6 +4,8 @@
 
 属于你自己的跨设备图片 & 文字中转池，几分钟就能部署到 Cloudflare 免费档。在一台设备上截图或存图，另一台设备随手就能拿到。手机端无需装 App（是 PWA），不经任何第三方图床——数据只待在你自己的 Cloudflare 账户里。
 
+**🎬 在线演示（只读示例池）：https://shotsync-demo.defiabell.workers.dev**
+
 ![shotsync gallery](docs/screenshot.png)
 
 ## 这是什么
