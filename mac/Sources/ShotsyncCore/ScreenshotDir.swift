@@ -40,9 +40,21 @@ public final class ScreenshotDirManager {
   }
 
   public func redirect(to folder: String) {
-    // Save the original value only on the first redirect.
     if !hasSaved {
-      setSavedOriginal(backend.read())  // nil means "was the default"
+      // Capture only when nothing is stored yet. `hasSaved` alone is not
+      // enough: it tracks this process, while the stored value outlives it, so
+      // a second redirect in a later session (the help panel's "Redirect now")
+      // would otherwise recapture and overwrite a good original with whatever
+      // the location had drifted to.
+      if savedOriginal() == nil {
+        let current = backend.read()
+        // Never record the destination as the "original" either — that makes
+        // restore a permanent no-op. Happens when the app is killed rather
+        // than quit (launchctl unload, reboot, crash), since that skips
+        // restore and leaves the location at `folder`. nil means "was the
+        // default", so restore clears the key instead.
+        setSavedOriginal(Self.isSameDirectory(current, folder) ? nil : current)
+      }
       hasSaved = true
     }
     // Write the new folder path and apply the change.

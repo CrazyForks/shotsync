@@ -58,6 +58,57 @@ final class FakeBackend: DefaultsBackend {
     #expect(be.applied == 1)
   }
 
+  // Being killed (launchctl unload, reboot, crash) skips restore, so the
+  // location stays pointed at the shotsync folder. On the next launch redirect
+  // must NOT record that as the "original": doing so makes restore a no-op and
+  // loses the real location permanently.
+  @Test func redirectRefusesToRecordItsOwnDestinationAsOriginal() {
+    let be = FakeBackend(); be.current = "/Users/me/Pictures/shotsync"
+    var saved: String?? = nil
+    let mgr = ScreenshotDirManager(
+      backend: be,
+      savedOriginal: { saved ?? nil },
+      setSavedOriginal: { saved = .some($0) })
+
+    mgr.redirect(to: "/Users/me/Pictures/shotsync")
+
+    #expect(saved != nil)             // it was written...
+    #expect((saved ?? nil) == nil)    // ...as "was the system default"
+  }
+
+  // The help panel's "Redirect now" calls redirect() directly, without the
+  // "have we captured yet" gate that guards the launch-time prompt. If the
+  // location drifted away from the shotsync folder by any route other than our
+  // own restore(), that click must not clobber an original we already hold —
+  // hasSaved only tracks the current process, so this IS its first capture.
+  @Test func redirectKeepsAnOriginalCapturedInAnEarlierSession() {
+    let be = FakeBackend(); be.current = "/Users/me/SomewhereElse"
+    var saved: String?? = .some("/Users/me/Desktop")
+    let mgr = ScreenshotDirManager(
+      backend: be,
+      savedOriginal: { saved ?? nil },
+      setSavedOriginal: { saved = .some($0) })
+
+    mgr.redirect(to: "/Users/me/Pictures/shotsync")
+
+    #expect((saved ?? nil) == "/Users/me/Desktop")   // real original survives
+    #expect(be.current == "/Users/me/Pictures/shotsync")
+  }
+
+  // Same protection when the two paths name one directory in different shapes.
+  @Test func redirectRefusesItsDestinationInAnotherPathShape() {
+    let be = FakeBackend(); be.current = "/Users/me/Pictures/shotsync/"
+    var saved: String?? = nil
+    let mgr = ScreenshotDirManager(
+      backend: be,
+      savedOriginal: { saved ?? nil },
+      setSavedOriginal: { saved = .some($0) })
+
+    mgr.redirect(to: "/Users/me/Pictures/shotsync")
+
+    #expect((saved ?? nil) == nil)
+  }
+
   @Test func currentLocationReadsThroughToTheBackend() {
     let be = FakeBackend()
     let mgr = ScreenshotDirManager(backend: be, savedOriginal: { nil }, setSavedOriginal: { _ in })
