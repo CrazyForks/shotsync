@@ -16,6 +16,7 @@ open /Applications/shotsync.app
 First launch asks for your Worker base URL + token (stored in the Keychain), then offers to point the macOS screenshot location at `~/Pictures/shotsync` (restored when you quit or choose "Restore default screenshot location").
 
 ## How it works
+- You keep taking screenshots with the macOS shortcuts — `⌘⇧3` (whole screen), `⌘⇧4` (selection), `⌘⇧5` (capture panel). shotsync registers no shortcuts of its own; it only changes where those shots land. The menu's **How to use…** panel restates this and reports whether the redirect and the Worker are actually set up.
 - Watches `~/Pictures/shotsync` via FSEvents; each new `.png` is thumbnailed client-side and POSTed to `/api/upload` (`X-Source: mac`).
 - Uploaded files are marked with an extended attribute so restarts don't re-upload.
 - Failures go to a persistent queue and retry with capped exponential backoff.

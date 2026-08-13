@@ -57,4 +57,42 @@ final class FakeBackend: DefaultsBackend {
     #expect(be.current == nil)            // cleared back to default
     #expect(be.applied == 1)
   }
+
+  @Test func currentLocationReadsThroughToTheBackend() {
+    let be = FakeBackend()
+    let mgr = ScreenshotDirManager(backend: be, savedOriginal: { nil }, setSavedOriginal: { _ in })
+
+    #expect(mgr.currentLocation() == nil)   // unset means the system default
+    be.current = "/Users/me/Pictures/shotsync"
+    #expect(mgr.currentLocation() == "/Users/me/Pictures/shotsync")
+  }
+
+  // The system screenshot location can come back in shapes that differ
+  // textually but name the same directory. Comparing raw strings would
+  // report "not redirected" while syncing works fine.
+  @Test func isSameDirectoryIgnoresTrailingSlashes() {
+    #expect(ScreenshotDirManager.isSameDirectory("/Users/me/Pictures/shotsync/",
+                                                 "/Users/me/Pictures/shotsync"))
+  }
+
+  @Test func isSameDirectoryIgnoresRepeatedSlashes() {
+    #expect(ScreenshotDirManager.isSameDirectory("/Users/me//Pictures/shotsync",
+                                                 "/Users/me/Pictures/shotsync"))
+  }
+
+  @Test func isSameDirectoryExpandsTilde() {
+    #expect(ScreenshotDirManager.isSameDirectory("~/Pictures/shotsync",
+                                                 NSHomeDirectory() + "/Pictures/shotsync"))
+  }
+
+  @Test func isSameDirectoryRejectsDifferentDirectories() {
+    #expect(!ScreenshotDirManager.isSameDirectory("/Users/me/Desktop",
+                                                  "/Users/me/Pictures/shotsync"))
+  }
+
+  // A nil left side means the location was never set (system default),
+  // which is never the same as an explicit folder.
+  @Test func isSameDirectoryTreatsNilAsNoMatch() {
+    #expect(!ScreenshotDirManager.isSameDirectory(nil, "/Users/me/Pictures/shotsync"))
+  }
 }

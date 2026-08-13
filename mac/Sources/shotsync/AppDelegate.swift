@@ -20,13 +20,13 @@ final class SystemDefaultsBackend: DefaultsBackend {
   func applyChange() { run("/usr/bin/killall", ["SystemUIServer"]) }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
   private var statusItem: NSStatusItem!
   private var watcher: Watcher?
   private var uploader: Uploader!
   private var dirManager: ScreenshotDirManager!
   private var paused = false
-  private var todayCount = 0
+  private let menu = NSMenu()
   private let folder = NSHomeDirectory() + "/Pictures/shotsync"
 
   func applicationDidFinishLaunching(_ n: Notification) {
@@ -41,7 +41,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       setSavedOriginal: { Config.originalScreenshotDir = $0 })
 
     statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-    rebuildMenu()
+    menu.delegate = self
+    statusItem.menu = menu
+    refreshMenu()
 
     if Config.baseURL == nil || Config.token() == nil { promptSettings() }
     confirmRedirectIfNeeded()
@@ -54,8 +56,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     watcher = Watcher(folder: folder) { [weak self] path in
       guard let self, !self.paused else { return }
       self.uploader.enqueueAndUpload(path)
-      self.todayCount += 1
-      self.rebuildMenu()
     }
     watcher?.start()
   }
@@ -89,24 +89,97 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
   }
 
-  private func rebuildMenu() {
-    let menu = NSMenu()
-    statusItem.button?.title = paused ? "⏸" : "●"
-    menu.addItem(NSMenuItem(title: paused ? "Paused" : "Syncing", action: nil, keyEquivalent: ""))
-    menu.addItem(NSMenuItem(title: "Today: \(todayCount)", action: nil, keyEquivalent: ""))
-    menu.addItem(.separator())
-    menu.addItem(NSMenuItem(title: paused ? "Resume" : "Pause", action: #selector(togglePause), keyEquivalent: ""))
-    menu.addItem(NSMenuItem(title: "Open gallery", action: #selector(openGallery), keyEquivalent: ""))
-    menu.addItem(NSMenuItem(title: "Copy gallery link", action: #selector(copyLink), keyEquivalent: ""))
-    menu.addItem(.separator())
-    menu.addItem(NSMenuItem(title: "Settings…", action: #selector(settings), keyEquivalent: ""))
-    menu.addItem(NSMenuItem(title: "Restore default screenshot location", action: #selector(restoreDir), keyEquivalent: ""))
-    menu.addItem(NSMenuItem(title: "Quit shotsync", action: #selector(quit), keyEquivalent: "q"))
-    for i in menu.items where i.action != nil { i.target = self }
-    statusItem.menu = menu
+  // MARK: - Menu
+
+  /// The screenshot location can be changed outside this app (System Settings,
+  /// another tool), so rebuild on every open instead of caching.
+  func menuNeedsUpdate(_ menu: NSMenu) { refreshMenu() }
+
+  /// Sampled fresh on every call rather than cached: the whole point of the
+  /// status is to reflect the system right now, and the read is a sub-millisecond
+  /// `defaults` call. A cached copy could claim "✓ syncing" after the location
+  /// changed underneath us.
+  private func currentHealth() -> SyncHealth {
+    // A base URL without a token can't upload, so treat it as unconfigured.
+    let configured = Config.baseURL != nil && Config.token() != nil
+    return SyncHealth(
+      screenshotLocation: dirManager.currentLocation(),
+      expectedLocation: folder,
+      workerHost: configured ? Config.baseURL?.host : nil)
   }
 
-  @objc private func togglePause() { paused.toggle(); rebuildMenu() }
+  private func refreshMenu() {
+    let health = currentHealth()
+    statusItem.button?.title = paused ? "⏸" : "●"
+    menu.removeAllItems()
+    add(paused ? "Paused" : "Syncing", nil)
+    add(HelpContent.menuLocationLine(for: health), nil)
+    menu.addItem(.separator())
+    // The gallery item doubles as the URL display; with no Worker configured
+    // it becomes a shortcut into Settings.
+    add(HelpContent.menuGalleryLine(for: health),
+        health.hasWorker ? #selector(openGallery) : #selector(settings))
+    // Disabled without a Worker — there is no link to put on the clipboard.
+    add("Copy gallery link", health.hasWorker ? #selector(copyLink) : nil)
+    menu.addItem(.separator())
+    add("How to use…", #selector(showHelp))
+    add(paused ? "Resume" : "Pause", #selector(togglePause))
+    menu.addItem(.separator())
+    add("Settings…", #selector(settings))
+    add("Restore default screenshot location", #selector(restoreDir))
+    add("Quit shotsync", #selector(quit), key: "q")
+  }
+
+  private func add(_ title: String, _ action: Selector?, key: String = "") {
+    let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+    if action != nil { item.target = self }
+    menu.addItem(item)
+  }
+
+  // MARK: - Actions
+
+  @objc private func showHelp() {
+    let health = currentHealth()
+    let a = NSAlert()
+    a.messageText = HelpContent.title
+    a.informativeText = HelpContent.subtitle
+    a.accessoryView = monospacedLabel(HelpContent.body(for: health))
+
+    // Buttons come from HelpContent in display order, so a response index maps
+    // straight back onto its action — nothing here has to stay in sync by hand.
+    let actions = HelpContent.buttonOrder(for: health)
+    for action in actions { a.addButton(withTitle: HelpContent.buttonTitle(for: action)) }
+    a.addButton(withTitle: "Done")
+
+    let clicked = a.runModal().rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
+    if actions.indices.contains(clicked) { execute(actions[clicked]) }  // else: Done
+  }
+
+  private func execute(_ action: HelpAction) {
+    switch action {
+    case .openGallery: openGallery()
+    case .redirectNow: dirManager.redirect(to: folder)
+    case .openSettings: promptSettings()
+    }
+  }
+
+  /// The panel body relies on column alignment, so it needs a monospaced font
+  /// rather than the alert's proportional informativeText.
+  private func monospacedLabel(_ text: String) -> NSView {
+    let font = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+    let attributed = NSAttributedString(string: text, attributes: [.font: font])
+    // Measure against a width no line reaches, so nothing wraps.
+    let bounds = attributed.boundingRect(
+      with: NSSize(width: 900, height: 0),
+      options: [.usesLineFragmentOrigin, .usesFontLeading])
+    let field = NSTextField(labelWithAttributedString: attributed)
+    field.usesSingleLineMode = false
+    field.maximumNumberOfLines = 0
+    field.frame = NSRect(x: 0, y: 0, width: ceil(bounds.width), height: ceil(bounds.height))
+    return field
+  }
+
+  @objc private func togglePause() { paused.toggle(); refreshMenu() }
   @objc private func openGallery() { if let u = Config.baseURL { NSWorkspace.shared.open(u) } }
   @objc private func copyLink() {
     NSPasteboard.general.clearContents()

@@ -21,6 +21,24 @@ public final class ScreenshotDirManager {
     self.setSavedOriginal = setSavedOriginal
   }
 
+  /// The location the system currently saves screenshots to.
+  /// nil means the key is unset, i.e. the system default (~/Desktop).
+  public func currentLocation() -> String? { backend.read() }
+
+  /// Whether two paths name the same directory. The system screenshot
+  /// location can come back tilde-form, with a trailing slash, or with
+  /// repeated slashes, so raw string comparison would report "not
+  /// redirected" while syncing actually works.
+  ///
+  /// Case is deliberately NOT normalized. A case-insensitive compare would
+  /// call two genuinely different directories equal on a case-sensitive
+  /// volume, and this answer drives a "✓ syncing" claim — a false ✓ is worse
+  /// than a false ✗, which the user can clear with one click on Redirect now.
+  public static func isSameDirectory(_ a: String?, _ b: String) -> Bool {
+    guard let a else { return false }
+    return (a as NSString).standardizingPath == (b as NSString).standardizingPath
+  }
+
   public func redirect(to folder: String) {
     // Save the original value only on the first redirect.
     if !hasSaved {
