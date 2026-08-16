@@ -79,6 +79,9 @@ export const galleryHTML = /* html */ `<!doctype html>
 
 <script>
 const DEMO = false; // the DEMO_MODE worker serves this page with "true" (see index.ts)
+// Demo chrome switches to English for non-Chinese browsers (HN/Reddit visitors).
+// Normal pools are unaffected: DEMO_EN is always false when DEMO is false.
+const DEMO_EN = DEMO && !((navigator.language || "").toLowerCase().startsWith("zh"));
 const TOKEN_KEY = "shotsync_token";
 let token = localStorage.getItem(TOKEN_KEY) || "";
 
@@ -127,7 +130,9 @@ async function openFull(id) {
       img.addEventListener("load", () => URL.revokeObjectURL(url), { once: true });
       img.src = url; img.classList.remove("hidden");
     }
-    $("#saveBtn").textContent = currentKind === "text" ? "复制" : "保存";
+    $("#saveBtn").textContent = currentKind === "text"
+      ? (DEMO_EN ? "Copy" : "复制")
+      : (DEMO_EN ? "Save" : "保存");
   } catch {}
 }
 
@@ -157,13 +162,13 @@ document.querySelector("#shareBtn").onclick = async () => {
 document.querySelector("#saveBtn").onclick = async () => {
   if (!currentId) return;
   if (currentKind === "text") {
-    try { await navigator.clipboard.writeText($("#viewerText").textContent); toast("已复制"); }
-    catch { toast("复制失败，请长按选择"); }
+    try { await navigator.clipboard.writeText($("#viewerText").textContent); toast(DEMO_EN ? "Copied" : "已复制"); }
+    catch { toast(DEMO_EN ? "Copy failed — long-press to select" : "复制失败，请长按选择"); }
     return;
   }
   try {
     const res = await fetch("/i/" + currentId + "?size=full", { headers: authHeaders() });
-    if (!res.ok) { toast("保存失败"); return; }
+    if (!res.ok) { toast(DEMO_EN ? "Save failed" : "保存失败"); return; }
     const blob = await res.blob();
     const ext = (blob.type.split("/")[1] || "jpg").replace("jpeg", "jpg");
     const file = new File([blob], currentId + "." + ext, { type: blob.type || "image/jpeg" });
@@ -177,7 +182,7 @@ document.querySelector("#saveBtn").onclick = async () => {
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
   } catch (e) {
-    if (e && e.name !== "AbortError") toast("保存失败"); // ignore user-cancelled share
+    if (e && e.name !== "AbortError") toast(DEMO_EN ? "Save failed" : "保存失败"); // ignore user-cancelled share
   }
 };
 
@@ -400,12 +405,14 @@ if ("serviceWorker" in navigator) {
 async function enterDemo() {
   showApp();
   ["#uploadBtn", "#textBtn", "#selectBtn", "#shareBtn", "#delBtn"].forEach((s) => $(s).classList.add("hidden"));
-  $("#bar h1").textContent = "shotsync · 只读演示池";
+  if (DEMO_EN) document.documentElement.lang = "en";
+  $("#bar h1").textContent = DEMO_EN ? "shotsync · read-only demo" : "shotsync · 只读演示池";
+  $("#closeBtn").textContent = DEMO_EN ? "Close" : "关闭";
   const link = document.createElement("a");
   link.href = "https://github.com/Defiabell/shotsync";
   link.target = "_blank";
   link.rel = "noreferrer";
-  link.textContent = "5 分钟部署自己的 →";
+  link.textContent = DEMO_EN ? "Deploy your own in ~5 min →" : "5 分钟部署自己的 →";
   link.style.cssText = "color:#8ab4ff;font-size:13px;text-decoration:none;white-space:nowrap";
   $("#bar").appendChild(link);
   await initFeed();
