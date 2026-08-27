@@ -22,6 +22,28 @@ A single **Cloudflare Worker + R2 bucket** backing a small **PWA gallery**:
 
 iCloud / AirDrop / network drives / public image hosts are either manual, ecosystem-locked, or route your (possibly work) screenshots through someone else's cloud. shotsync is a self-hosted, free, privacy-respecting take: data only moves between your devices and your own Cloudflare account.
 
+## How it compares (LocalSend, PairDrop, messaging yourself)
+
+The dividing line is **a live transfer vs. a pool that waits**. LocalSend and PairDrop connect two devices that are both awake right now and stream between them. shotsync keeps the item for 30 days, so the sending device can be asleep, on a different network, or in another country by the time you pick it up.
+
+|  | shotsync | [LocalSend](https://localsend.org) | [PairDrop](https://pairdrop.net) |
+| --- | --- | --- | --- |
+| Both devices online at once | not required | required | required |
+| Install | none (PWA in the browser) | an app on every device | none (browser) |
+| Across different networks | yes | no — same local network | via a temporary public room |
+| Where the bytes go | your own Cloudflare R2 | device to device, no server | peer-to-peer, public signalling server |
+| Left behind after transfer | 30 days, browsable | nothing | nothing |
+| Setup | deploy once, ~5 min | install, then open | just open the page |
+| Per-item size limit | 25 MB | bounded by disk | bounded by the connection |
+
+**Choose LocalSend if** both devices are on the same Wi-Fi, both in front of you, and the file is large. It is peer-to-peer, has no practical size ceiling, and needs no internet at all.
+
+**Choose PairDrop if** you want zero setup and would rather not deploy anything. It is the shortest path from nothing to a transferred file.
+
+**Choose shotsync if** you keep sending yourself screenshots and want them still there when you sit back down hours later, on a different machine, on a different network — and you would rather they lived in your own Cloudflare account than on a public image host. It replaces the habit of messaging things to yourself, not AirDrop.
+
+**Do not choose shotsync if** you need per-user accounts: one shared token unlocks the whole pool. See the "Security model & limitations" section below before deploying.
+
 ## Features
 
 - Cross-device image + text pool (a shared clipboard + screenshot drop)
