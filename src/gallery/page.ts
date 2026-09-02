@@ -37,6 +37,9 @@ export const galleryHTML = /* html */ `<!doctype html>
   #compose .row { display: flex; justify-content: flex-end; gap: 10px; }
   #grid .sel { outline: 3px solid #2b6cff; outline-offset: -3px; opacity: .8; }
 </style>
+<!-- Inline so the browser never requests /favicon.ico, which this Worker does
+     not serve and which showed up as a 404 on every desktop page load. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232b6cff'/%3E%3Cpath d='M9 20.5l5-9 4 6 2-3 3 6z' fill='%23fff'/%3E%3Ccircle cx='11.5' cy='11' r='2' fill='%23fff'/%3E%3C/svg%3E">
 </head>
 <body>
   <div id="gate" class="hidden">
@@ -273,9 +276,17 @@ function makeCell(item) {
   const el = document.createElement(isText ? "div" : "img");
   el.dataset.id = item.id;
   el.dataset.kind = isText ? "text" : "image";
-  if (isText) { el.className = "txtcell"; el.textContent = "…"; }
+  if (isText) {
+    el.className = "txtcell";
+    // /api/list now carries the preview, so the card renders its real text on
+    // first paint. The "…" placeholder and the lazy fetch remain for items the
+    // server did not inline (past MAX_INLINE_SNIPPETS, or a failed read).
+    el.textContent = item.snippet || "…";
+  }
   el.onclick = () => { if (selectMode) toggleSelect(el); else openFull(item.id); };
-  contentObserver.observe(el);
+  // Nothing left to load for a text card that already has its snippet —
+  // observing it would fire one pointless request per card.
+  if (!(isText && item.snippet)) contentObserver.observe(el);
   return el;
 }
 
